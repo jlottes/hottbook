@@ -390,7 +390,7 @@ Definition pair_eq_unique {A B} {x y : A × B} (r: x = y) :
   r = pair⁼ (ap π₁ r, ap π₂ r).
 Proof. destruct r, x as [a b]. exact refl. Defined.
 
-(* Theorem 2.6.7 *)
+(* Theorem 2.6.2 *)
 Definition pair_eq_equiv {A B} (x y : A × B) : x = y ≃ (π₁ x = π₁ y) × (π₂ x = π₂ y)
 := (Equiv_from_qinv (λ r, (ap π₁ r, ap π₂ r)) (pair⁼; (pair_eq_compute, pair_eq_unique⁻¹)%hom)).
 
@@ -404,10 +404,12 @@ Proof. destruct x as [a b], y as [a' b'], z as [a'' b''].
   simpl in p,q,p',q'. destruct p,q,p',q'. exact refl.
 Defined.
 
+(* Theorem 2.6.4 *)
 Definition pair_transport {Z} (A B: Z → 𝓤) {z w} (p:z = w :> Z) (x:A z × B z)
   : transport (λ z, A z × B z) p x = (transport A p (π₁ x), transport B p (π₂ x)).
 Proof. destruct p. simpl. exact (pair_unique x). Defined.
 
+(* Theorem 2.6.5 *)
 Section pair_ap.
   Context {A B A' B' : 𝓤} (g:A → A') (h:B → B').
   Let f z := (g (π₁ z), h (π₂ z)).
@@ -661,7 +663,7 @@ Proof. destruct p. exact (eqv (((concat_p1 _) ·) ∘ (· (concat_1p _)⁻¹))).
 
 (* Section 2.12: Coproducts *)
 Section coproducts.
-  Context (A B:𝓤).
+  Context {A B:𝓤}.
   Section inl.
     Context (a₀:A).
     Let code (x : A + B) : 𝓤 := match x with inl a => a₀ = a | _ => 𝟎 end.
@@ -718,8 +720,47 @@ Section coproducts.
   := coproduct_inl_equiv_code _ _.
   Definition coproduct_inr_inl_equiv b a : (@inr A B b = inl a) ≃ 𝟎
   := coproduct_inr_equiv_code _ _.
-End coproducts.
 
+  Definition inl_eq_intro {a₁ a₂} : (a₁ = a₂) → (inl a₁ = inl a₂) := (coproduct_inl_equiv _ _)⁻¹.
+  Definition inr_eq_intro {b₁ b₂} : (b₁ = b₂) → (inr b₁ = inr b₂) := (coproduct_inr_equiv _ _)⁻¹.
+End coproducts.
+Notation "inl⁼" := inl_eq_intro.
+Notation "inr⁼" := inr_eq_intro.
+
+Section sum_ap.
+  Context {A B A' B' : 𝓤} (g:A → A') (h:B → B').
+  Let f (z:A + B) := match z with
+  | inl a => inl (g a)
+  | inr b => inr (h b)
+  end.
+
+  Definition inl_ap `(p: x = y :> A) : ap f (inl⁼ p) = inl⁼ (ap g p)
+  := match p with refl => refl end.
+
+  Definition inr_ap `(q: x = y :> B) : ap f (inr⁼ q) = inr⁼ (ap h q)
+  := match q with refl => refl end.
+End sum_ap.
+
+Local Open Scope bool_scope.
+
+Definition bool_equiv_coproduct : 𝟐 ≃ 𝟏 + 𝟏.
+Proof. apply (Equiv_from_qinv_alt
+                (λ b, match b with 0 => inl ★ | 1 => inr ★ end)
+                (λ x, match x with inl _ => 0 | inr _ => 1 end) ).
++ intros [[]|[]]; exact refl.
++ intros [|]; exact refl.
+Defined.
+
+Definition bool_0_eq_0_equiv : 0 = 0 ≃ 𝟏 :=
+  (eqv (A:= 0 = 0) (ap bool_equiv_coproduct) · coproduct_inl_equiv _ _ · unit_eq_equiv _ _)%equiv.
+Definition bool_1_eq_1_equiv : 1 = 1 ≃ 𝟏 :=
+  (eqv (A:= 1%bool = 1%bool) (ap bool_equiv_coproduct) · coproduct_inr_equiv _ _ · unit_eq_equiv _ _)%equiv.
+Definition bool_0_ne_1 : 0 = 1 ≃ 𝟎 :=
+  (eqv (A:= 0 = 1%bool) (ap bool_equiv_coproduct) · coproduct_inl_inr_equiv _ _)%equiv.
+Definition bool_1_ne_0 : 1 = 0 ≃ 𝟎 :=
+  (eqv (A:= 1%bool = 0) (ap bool_equiv_coproduct) · coproduct_inr_inl_equiv _ _)%equiv.
+
+Local Close Scope bool_scope.
 
 (* Section 2.13: Natural numbers *)
 Local Open Scope nat_scope.
@@ -776,4 +817,17 @@ Definition nat_discrete : Π (n:ℕ), (n = n) ≃ 𝟏 := fix F (a:ℕ) := match
 | 0 => nat_eq_equiv_code 0 0
 | succ n => (nat_eq_equiv_SS n n · F n)%equiv
 end.
-
+Definition nat_decidable : Π m n : ℕ, ((m = n) ≃ 𝟏) + ((m = n) ≃ 𝟎)
+:= fix F (a:ℕ) := match a with
+| 0 => λ b, match b with
+       | 0 => inl (nat_discrete 0)
+       | succ m => inr (nat_eq_equiv_0S _)
+       end
+| succ n => λ b, match b with
+       | 0 => inr (nat_eq_equiv_S0 _)
+       | succ m => match F n m with
+                   | inl E => inl (nat_eq_equiv_SS _ _ · E)%equiv
+                   | inr E => inr (nat_eq_equiv_SS _ _ · E)%equiv
+                   end
+       end
+end.

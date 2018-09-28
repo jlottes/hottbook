@@ -10,6 +10,30 @@ Hint Extern 2 (isProp (_ = _ :> ?A)) => eapply (_ : @isSet A) : typeclass_instan
 
 Local Open Scope path_scope.
 
+(* Example 3.1.5 *)
+Definition isSet_prod `{isSet A} `{isSet B} : isSet (A × B).
+Proof. intros x y p q.
+  refine (pair_eq_unique p · ap _ _ · (pair_eq_unique q)⁻¹).
+  apply pair⁼; simpl.
+  split. apply (_ : isSet A). apply (_ : isSet B).
+Defined.
+Hint Extern 2 (isSet (_ × _)) => eapply @isSet_prod : typeclass_instances.
+
+Definition isSet_sig `(B:A → 𝓤) `{isSet A} `{Π a, isSet (B a)} : isSet (sig B).
+Proof. intros x y p q.
+  refine (sig_eq_unique p · ap _ _ · (sig_eq_unique q)⁻¹).
+  apply sig⁼. exists ((_ : isSet A) _ _ _ _). apply (_ : isSet (B _)).
+Defined.
+Hint Extern 2 (isSet (sig _)) => eapply @isSet_sig : typeclass_instances.
+
+(* Example 3.1.6 *)
+Definition isSet_Pi {WF:Funext} `(B:A → 𝓤) {H:Π x, isSet (B x)} : isSet (Π x, B x).
+Proof. intros f g p q.
+  refine (funext_unique p · ap _ _ · (funext_unique q)⁻¹).
+  apply funext. intro x. apply (_ : isSet (B _)).
+Defined.
+Hint Extern 2 (isSet (Π x, _)) => eapply @isSet_Pi : typeclass_instances.
+
 Definition isProp_0 : isProp 𝟎 := λ x, match x with end.
 
 Hint Extern 2 (isProp 𝟎) => eexact isProp_0 : typeclass_instances.
@@ -42,6 +66,7 @@ Hint Extern 8 (isSet _) => eapply @prop_is_set : typeclass_instances.
 Tactic Notation "funext" simple_intropattern(a) := apply weak_funext; intros a.
 Tactic Notation "funext" simple_intropattern(a) simple_intropattern(b) := funext a; funext b.
 
+(* Lemma 3.3.5 *)
 Definition isProp_isProp `{!Funext} A : isProp (isProp A).
 Proof. intros f g. funext x y. apply (_ : isSet A). Defined.
 Hint Extern 2 (isProp (isProp _)) => eapply @isProp_isProp : typeclass_instances.
@@ -58,6 +83,10 @@ Definition isProp_Pi {WF:Funext} `(B:A → 𝓤) {H:Π x, isProp (B x)} : isProp
 Proof. intros f g. funext x. apply H. Defined.
 Hint Extern 2 (isProp (Π x, _)) => eapply @isProp_Pi : typeclass_instances.
 Hint Extern 2 (isProp (¬ _)) => eapply @isProp_Pi : typeclass_instances.
+
+(* Lemma 3.5.1 *)
+Definition subtype_eq `{P:A → 𝓤} {H:Π a, isProp (P a)} (x y : sig P) : x.1 = y.1 → x = y
+:= λ p, sig⁼ (p; H _ _ _).
 
 Module Export PropTrunc.
   Private Inductive merely (A:𝓤) : 𝓤 := hexists : A → merely A.

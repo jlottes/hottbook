@@ -147,6 +147,8 @@ Definition rec₂ (C:𝓤) (c₀ c₁:C) (x:𝟐) :=
 Definition ind₂ (C:𝟐 → 𝓤) (c₀:C false) (c₁:C true) (x:𝟐) : C x :=
   match x with 0 => c₀ | 1 => c₁ end%bool.
 
+Definition not₂ := (rec₂ _ 1 0)%bool.
+
 (* Section 1.9: Natural numbers *)
 Inductive nat : 𝓤₀ :=
   | nat_zero : nat
