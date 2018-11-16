@@ -103,6 +103,53 @@ Definition cancelR {A:𝓤} {x y z : A} (p q : x = y) (r : y = z) :
   p · r = q · r → p = q
 := λ h, (concat_pp_V _ _)⁻¹ · (h ·ᵣ r⁻¹) · concat_pp_V _ _.
 
+
+(* Eckmann-Hilton *)
+
+Definition whiskerL_1p {A:𝓤} {x y : A} {p q : x = y} (α:p = q)
+  : 1 ·ₗ α = concat_1p p · α · (concat_1p q)⁻¹
+:= match α with 1 => (concat_pV _)⁻¹ · ((concat_p1 _)⁻¹ ·ᵣ _) end.
+
+Definition whiskerR_p1 {A:𝓤} {x y : A} {p q : x = y} (α:p = q)
+  : α ·ᵣ 1 = concat_p1 p · α · (concat_p1 q)⁻¹
+:= match α with 1 => (concat_pV _)⁻¹ · ((concat_p1 _)⁻¹ ·ᵣ _) end.
+
+
+Definition concat_1p_1 {A:𝓤} {x y : A} (p : x = y) : (1 · p) · 1 = p
+  := (concat_1p _ ·ᵣ _) · concat_p1 _ .
+
+Definition concat_1_p1 {A:𝓤} {x y : A} (p : x = y) : 1 · (p · 1) = p
+  := (_ ·ₗ concat_p1 _) · concat_1p _ .
+
+
+Definition concat2_whisker_rl {A:𝓤} {a b c : A} {p q : a = b} {r s : b = c}
+  (α : p = q) (β : r = s) : α ∗ β = (α ·ᵣ r) · (q ·ₗ β)
+:= match α, β with 1, 1 => 1 end.
+
+Definition concat2_whisker_lr {A:𝓤} {a b c : A} {p q : a = b} {r s : b = c}
+  (α : p = q) (β : r = s) : α ∗ β = (p ·ₗ β) · (α ·ᵣ s)
+:= match α, β with 1, 1 => 1 end.
+
+
+Class Point (A:𝓤) := point : A.
+Arguments point A {Point}.
+
+Definition Ω (A:𝓤) {a:Point A} := a = a.
+Arguments Ω A {a}, A a.
+
+Hint Extern 2 (Point (Ω ?A ?a)) => eexact (@refl A a) : typeclass_instances.
+
+Theorem EckmannHilton (A:𝓤) {a:Point A} (α β : Ω (Ω A))
+  : α · β = β · α .
+Proof.
+  pose proof whiskerR_p1 α · concat_1p_1 α as p.
+  pose proof whiskerL_1p β · concat_1p_1 β as q.
+  refine (_⁻¹ · (_ : α ∗ β = _)).
+  * exact (concat2_whisker_rl α β · (p ∗ q)).
+  * exact (concat2_whisker_lr α β · (q ∗ p)).
+Defined.
+
+
 (* Section 2.2: Functions are functors *)
 
 Definition ap `(f : A → B) `(p:a = b :> A) : f a = f b :=
@@ -266,38 +313,99 @@ Proof. intros [g[α β]] [k[γ δ]]. exists (g ∘ k). split.
 + exact ((g ∘ₗ δ ∘ᵣ f) · β).
 Defined.
 
-Definition isequiv {A B} (f:A → B) := (Σ (g:B → A), f ∘ g ~ id) × (Σ (h:B → A), h ∘ f ~ id).
-Existing Class isequiv.
+Local Close Scope homotopy_scope.
 
-Definition qinv_to_isequiv `{f:A → B} (g:qinv f) : isequiv f.
-Proof. destruct g as [g[α β]]. exact ((g;α),(g;β)). Defined.
+Definition linv `(f:A → B) := Σ (g:B → A), g ∘ f ~ id.
+Definition rinv `(f:A → B) := Σ (g:B → A), f ∘ g ~ id.
+Definition biinv `(f:A → B) := linv f × rinv f.
+
+Definition ishae `(f:A → B) := Σ (g:B → A) (η:g ∘ f ~ id) (ε:f ∘ g ~ id), Π x, ap f (η x) = ε (f x).
+
+Definition ishae_to_qinv `{f:A → B} (e:ishae f) : qinv f
+  := match e with (g;(η;(ε;_))) => (g;(ε, η)) end.
+Coercion ishae_to_qinv : ishae >-> qinv.
+
+(* Lemma 4.2.2 *)
+Definition half_adjoint_implies_full {A B} (f:A → B) (g:B → A) (η:g ∘ f ~ id) (ε:f ∘ g ~ id)
+  (τ:Π x, ap f (η x) = ε (f x)) : Π y, ap g (ε y) = η (g y).
+Proof. intro y.
+  apply (cancelL (ap (g ∘ f ∘ g) (ε y))).
+  refine (_ · hom_natural η (ap g (ε y)) · (ap_compose g (g ∘ f) (ε y) ·ᵣ _)⁻¹).
+  refine ((ap_compose (f ∘ g) g _ ·ᵣ _) · _⁻¹).
+  refine (_ · (ap_pp g _ _)⁻¹ · ap (ap g) ((τ (g y) ·ᵣ _) · hom_natural ε (ε y)) · ap_pp g _ _).
+  refine ((hom_id_natural η (g y) · ap_compose _ _ _ ·ᵣ _) · (_ ·ₗ _)).
+  refine (ap_id _ · ap (ap g) (ap_id _)⁻¹).
+Defined.
+
+(* Theorem 4.2.3 *)
+Definition qinv_to_ishae `{f:A → B} : qinv f → ishae f.
+Proof.
+  intros [g[ε η]]. exists g. exists η.
+  exists (λ b, (ε (f (g b)))⁻¹ · (ap f (η (g b)) · ε b)).
+  intros a.
+  refine ((concat_V_pp _ _)⁻¹ · ap _ _).
+  refine ( (_ ·ₗ (ap_id _)⁻¹) · hom_natural ε (ap f (η a)) · (_ ·ᵣ _)).
+  refine (ap_compose _ _ _ · ap (ap f) _⁻¹).
+  refine (hom_id_natural η a · ap_compose _ _ _).
+Defined.
+Coercion qinv_to_ishae : qinv >-> ishae.
+
+Definition ishae_compose {A B C} {h:B → C} {f:A → B} : ishae f → ishae h → ishae (h ∘ f).
+Proof. intros [g[β[α τ]]] [k[δ[γ ν]]]. exists (g ∘ k).
+  exists ((g ∘ₗ δ ∘ᵣ f) · β)%hom.
+  exists ((h ∘ₗ α ∘ᵣ k) · γ)%hom.
+  intro x. 
+  unfold hom_whiskerL, hom_whiskerR, hom_compose, hom_refl, hom_concat, id. simpl.
+  refine (_ · ((concat_p1 _ · concat_1p _)⁻¹ ·ᵣ _) · (_ ·ₗ ν _))%path.
+  refine (ap_compose _ _ _ · ap (ap h) _ · ap_pp h _ _).
+  refine (ap_pp f _ _ · (_ ·ₗ τ _) · _).
+  refine ((ap (ap f) (concat_p1 _ · concat_1p _) ·ᵣ _) · _⁻¹).
+  exact ((_ ·ₗ (ap_id _)⁻¹) · hom_natural α (δ (f x)) · (ap_compose _ _ _ ·ᵣ _)).
+Defined.
+
+
+Definition isequiv `(f:A → B) := ishae f.
+Existing Class isequiv.
+Identity Coercion Id_isequiv_to_ishae : isequiv >-> ishae.
+
+Definition qinv_to_isequiv `{f:A → B} (g:qinv f) : isequiv f := (g:ishae f).
 Coercion qinv_to_isequiv : qinv >-> isequiv.
 Hint Extern 10 (isequiv ?f) => match goal with g : qinv f |- _ => eexact (qinv_to_isequiv g) end : typeclass_instances.
 
-Definition isequiv_to_qinv `{f:A → B} (e:isequiv f) : qinv f.
-Proof. destruct e as [[g α][h β]].
+Definition qinv_to_biinv `{f:A → B} (g:qinv f) : biinv f.
+Proof. destruct g as [g[α β]]. exact ((g;β),(g;α)). Defined.
+Coercion qinv_to_biinv : qinv >-> biinv.
+
+Local Open Scope homotopy_scope.
+
+Definition biinv_to_qinv `{f:A → B} (e:biinv f) : qinv f.
+Proof. destruct e as [[h β][g α]].
   pose proof (β ∘ᵣ g)⁻¹ · (h ∘ₗ α) : g ~ h as γ.
   pose proof (γ ∘ᵣ f) · β : g ∘ f ~ id as β'.
   exact (g;(α,β')).
 Defined.
-Coercion isequiv_to_qinv : isequiv >-> qinv.
+Coercion biinv_to_qinv : biinv >-> qinv.
 
 Local Close Scope homotopy_scope.
 Local Close Scope path_scope.
 
-Definition id_isequiv A : isequiv (@id A) := ((id; λ x, refl), (id; λ x, refl)).
+Definition id_isequiv A : isequiv (@id A) := (id;(1;(1;1)))%hom.
 Hint Extern 2 (isequiv (@id ?A)) => eexact (id_isequiv A) : typeclass_instances.
 
-Instance inverse_from_isequiv `(f:A → B) {e:isequiv f} : InverseFunction f := (e:qinv f).
-Definition isequiv_inverse {A B} (f:A → B) {e:isequiv f} : isequiv f⁻¹ := qinv_inverse e.
+Instance inverse_from_isequiv `(f:A → B) {e:isequiv f} : InverseFunction f := e.1.
+Definition isequiv_inverse {A B} (f:A → B) {e:isequiv f} : isequiv f⁻¹ .
+Proof. destruct e as [g[η[ε τ]]]. change (isequiv g).
+  exists f. exists ε. exists η.
+  exact (half_adjoint_implies_full f g η ε τ).
+Defined.
 Hint Extern 2 (isequiv (@inv_fun _ _ _ (inverse_from_isequiv _))) => eapply @isequiv_inverse : typeclass_instances.
 
-Definition compose_isequiv {A B C} (f:A → B) (g:B → C) : isequiv f → isequiv g → isequiv (g ∘ f)
-:= λ e1 e2, qinv_compose e1 e2.
-Hint Extern 2 (isequiv (_ ∘ _)) => eapply @compose_isequiv : typeclass_instances.
+Definition isequiv_compose {A B C} (f:A → B) (g:B → C) : isequiv f → isequiv g → isequiv (g ∘ f)
+:= ishae_compose.
+Hint Extern 2 (isequiv (_ ∘ _)) => eapply @isequiv_compose : typeclass_instances.
 
-Definition equiv_linv_hom `(f:A → B) {e:isequiv f} : f⁻¹ ∘ f ~ id := π₂ (e:qinv f).2 .
-Definition equiv_rinv_hom `(f:A → B) {e:isequiv f} : f ∘ f⁻¹ ~ id := π₁ (e:qinv f).2 .
+Definition equiv_linv_hom `(f:A → B) {e:isequiv f} : f⁻¹ ∘ f ~ id := e.2.1 .
+Definition equiv_rinv_hom `(f:A → B) {e:isequiv f} : f ∘ f⁻¹ ~ id := e.2.2.1 .
 
 Definition Equiv (A B : 𝓤) := sig (@isequiv A B).
 Notation "A ≃ B" := (Equiv A B) (at level 75, no associativity) : type_scope.
@@ -313,7 +421,7 @@ Definition eqv `(f:A → B) {e:isequiv f} : A ≃ B := (f; e).
 Definition Equiv_from_qinv `(f:A → B) (g:qinv f) : A ≃ B := (f; _).
 
 Definition Equiv_from_qinv_alt `(f:A → B) (g:B → A) (α: f ∘ g ~ id) (β: g ∘ f ~ id)
-  : A ≃ B := (f;((g;α),(g;β))).
+  : A ≃ B := Equiv_from_qinv f (g;(α,β)).
 
 (* Lemma 2.4.12 *)
 Section Equiv_is_an_equivalence.
